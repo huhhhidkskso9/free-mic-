@@ -15,7 +15,7 @@ main{max-width:520px;margin:auto}.top{display:flex;align-items:center;justify-co
 </head>
 <body>
 <main>
-  <div class="top"><div class="brand">FREE <span>MIC</span></div><div class="edition">EXTREME ECHO EDITION</div></div>
+  <div class="top"><div class="brand">FREE <span>MIC</span></div><div class="edition">EXTREME AMP + ECHO</div></div>
   <section class="hero">
     <div class="orb">♬</div>
     <div class="status" id="status">MICROPHONE OFF</div>
@@ -27,10 +27,13 @@ main{max-width:520px;margin:auto}.top{display:flex;align-items:center;justify-co
   </section>
   <section class="panel">
     <div class="heading"><b>🎚️ AUDIO EFFECTS</b><span class="tag">LIVE CONTROLS</span></div>
-    <div class="control"><div class="row"><label for="gain">MIC AMPLIFIER</label><small id="gainVal">500%</small></div><input id="gain" type="range" min="0" max="500" value="500"></div>
-    <div class="control"><div class="row"><label for="echo">EXTREME ECHO</label><small id="echoVal">95%</small></div><input id="echo" type="range" min="0" max="100" value="95"></div>
-    <div class="control"><div class="row"><label for="delay">ECHO DELAY</label><small id="delayVal">420 ms</small></div><input id="delay" type="range" min="80" max="1000" step="10" value="420"></div>
-    <div class="control"><div class="row"><label for="reverb">REVERB</label><small id="reverbVal">60%</small></div><input id="reverb" type="range" min="0" max="80" value="60"></div>
+    <div class="control"><div class="row"><label for="gain">MIC AMPLIFIER — المضخم</label><small id="gainVal">500%</small></div><input id="gain" type="range" min="0" max="800" value="500"></div>
+    <div class="control"><div class="row"><label for="echo">ECHO MIX — نسبة الصدى</label><small id="echoVal">55%</small></div><input id="echo" type="range" min="0" max="100" value="55"></div>
+    <div class="control"><div class="row"><label for="delay">ECHO DELAY — زمن التأخير</label><small id="delayVal">320 ms</small></div><input id="delay" type="range" min="80" max="1000" step="10" value="320"></div>
+    <div class="control"><div class="row"><label for="feedback">ECHO FEEDBACK — تكرار الصدى</label><small id="feedbackVal">58%</small></div><input id="feedback" type="range" min="0" max="85" value="58"></div>
+    <div class="control"><div class="row"><label for="reverb">REVERB — الصدى المكاني</label><small id="reverbVal">28%</small></div><input id="reverb" type="range" min="0" max="80" value="28"></div>
+    <div class="control"><div class="row"><label for="output">OUTPUT VOLUME — مستوى الخرج</label><small id="outputVal">100%</small></div><input id="output" type="range" min="0" max="100" value="100"></div>
+    <div class="control"><div class="row"><label for="gate">NOISE GATE — عزل صوت الخلفية</label><small id="gateVal">10%</small></div><input id="gate" type="range" min="0" max="100" value="10"></div>
     <div class="heading" style="margin-top:20px"><b>QUICK PRESETS</b></div>
     <div class="presets">
       <button class="preset active" data-preset="silver">MAX ECHO</button>
@@ -39,12 +42,12 @@ main{max-width:520px;margin:auto}.top{display:flex;align-items:center;justify-co
       <button class="preset" data-preset="strong">LOUD MIC</button>
     </div>
   </section>
-  <div class="warn">تنبيه: الصدى والمضخم العاليان قد يسببان صفيرا أو تشويشا. ابدأ بمستوى منخفض وارفعه تدريجيا.</div>
-  <p class="note">هذه الأداة تعالج صوت المايك وتسمّعك التأثير داخل Safari أثناء بقاء الصفحة مفتوحة. بسبب قيود iOS، لا تستطيع إرسال الصوت المعالج مباشرة كمدخل مايك إلى تطبيق Discord على نفس الآيفون.</p>
+  <div class="warn">تنبيه: المضخم مضبوط افتراضيا على مستوى مرتفع جدا مع محدد ذروة لتقليل التقطيع. قد يسبب صفيرا أو تشويشا مؤذيا؛ خفّض الصوت قبل تشغيل المايك ولا تستخدمه قرب السماعات.</div>
+  <p class="note">هذه الأداة تعالج صوت المايك وتسمّعك التأثير عبر مخرج الصوت الذي يختاره iPhone. لا يمكن لصفحة Safari فرض توجيه الصوت إلى مكسر Bluetooth؛ إذا لم يظهر المكسر ضمن مخرج الصوت المتاح في iOS فلن تستطيع الصفحة إجباره على الاتصال.</p>
   <div class="foot">FREE MIC • LOCAL AUDIO PROCESSING • NO AUDIO UPLOAD</div>
 </main>
 <script>
-let ctx,stream,source,gainNode,delayNode,feedback,wetGain,dryGain,master,analyser,raf,convolver,reverbMix;
+let ctx,stream,source,gainNode,delayNode,feedback,wetGain,dryGain,master,analyser,inputAnalyser,gateNode,raf,convolver,reverbMix,limiter;
 const $=id=>document.getElementById(id);
 function makeImpulse(c,duration=2.2,decay=2.8){
  const rate=c.sampleRate,length=Math.floor(rate*duration),buf=c.createBuffer(2,length,rate);
@@ -55,23 +58,35 @@ function setValues(){
  if(!ctx)return;
  gainNode.gain.setTargetAtTime(+$('gain').value/100,ctx.currentTime,.025);
  const e=+$('echo').value/100;
- wetGain.gain.setTargetAtTime(e*1.05,ctx.currentTime,.03);
- feedback.gain.setTargetAtTime(Math.min(.86,e*.88),ctx.currentTime,.03);
+ wetGain.gain.setTargetAtTime(e,ctx.currentTime,.03);
+ feedback.gain.setTargetAtTime(+$('feedback').value/100,ctx.currentTime,.03);
  delayNode.delayTime.setTargetAtTime(+$('delay').value/1000,ctx.currentTime,.03);
- dryGain.gain.setTargetAtTime(1-e*.48,ctx.currentTime,.03);
- if(reverbMix)reverbMix.gain.setTargetAtTime(+$('reverb').value/100*.35,ctx.currentTime,.03);
+ dryGain.gain.setTargetAtTime(1-e*.65,ctx.currentTime,.03);
+ master.gain.setTargetAtTime(+$('output').value/100,ctx.currentTime,.03);
+ if(reverbMix)reverbMix.gain.setTargetAtTime(+$('reverb').value/100*.45,ctx.currentTime,.03);
 }
 function updateLabels(){
  $('gainVal').textContent=$('gain').value+'%';
  $('echoVal').textContent=$('echo').value+'%';
  $('delayVal').textContent=$('delay').value+' ms';
+ $('feedbackVal').textContent=$('feedback').value+'%';
  $('reverbVal').textContent=$('reverb').value+'%';
+ $('outputVal').textContent=$('output').value+'%';
+ $('gateVal').textContent=$('gate').value+'%';
 }
-['gain','echo','delay','reverb'].forEach(id=>$(id).addEventListener('input',()=>{updateLabels();setValues();}));
+['gain','echo','delay','feedback','reverb','output','gate'].forEach(id=>$(id).addEventListener('input',()=>{updateLabels();setValues();}));
 function meter(){
- if(!analyser)return;let data=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(data);
+ if(!analyser)return;
+ let data=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(data);
  let sum=0;for(let x of data){let v=(x-128)/128;sum+=v*v;}
- let rms=Math.sqrt(sum/data.length);$('meter').style.width=Math.min(100,rms*260)+'%';raf=requestAnimationFrame(meter);
+ let rms=Math.sqrt(sum/data.length);$('meter').style.width=Math.min(100,rms*260)+'%';
+ if(inputAnalyser&&gateNode&&ctx){
+  let raw=new Uint8Array(inputAnalyser.fftSize);inputAnalyser.getByteTimeDomainData(raw);let s=0;
+  for(let x of raw){let v=(x-128)/128;s+=v*v;}
+  let inputRms=Math.sqrt(s/raw.length),amount=+$('gate').value/100,threshold=amount*.055;
+  gateNode.gain.setTargetAtTime((amount===0||inputRms>threshold)?1:0,ctx.currentTime,.025);
+ }
+ raf=requestAnimationFrame(meter);
 }
 $('start').onclick=async()=>{
  try{
@@ -79,15 +94,15 @@ $('start').onclick=async()=>{
   ctx=new (window.AudioContext||window.webkitAudioContext)();
   await ctx.resume();
   source=ctx.createMediaStreamSource(stream);
-  gainNode=ctx.createGain();delayNode=ctx.createDelay(1.2);feedback=ctx.createGain();wetGain=ctx.createGain();dryGain=ctx.createGain();master=ctx.createGain();analyser=ctx.createAnalyser();analyser.fftSize=512;
+  gainNode=ctx.createGain();gateNode=ctx.createGain();gateNode.gain.value=1;delayNode=ctx.createDelay(1.2);feedback=ctx.createGain();wetGain=ctx.createGain();dryGain=ctx.createGain();master=ctx.createGain();limiter=ctx.createDynamicsCompressor();limiter.threshold.value=-18;limiter.knee.value=0;limiter.ratio.value=20;limiter.attack.value=.003;limiter.release.value=.12;analyser=ctx.createAnalyser();analyser.fftSize=512;inputAnalyser=ctx.createAnalyser();inputAnalyser.fftSize=512;
   convolver=ctx.createConvolver();convolver.buffer=makeImpulse(ctx);
-  reverbMix=ctx.createGain();reverbMix.gain.value=+$('reverb').value/100*.35;
-  source.connect(gainNode);
-  gainNode.connect(dryGain);dryGain.connect(master);
-  gainNode.connect(delayNode);delayNode.connect(wetGain);wetGain.connect(master);
+  reverbMix=ctx.createGain();
+  source.connect(gainNode);gainNode.connect(inputAnalyser);gainNode.connect(gateNode);
+  gateNode.connect(dryGain);dryGain.connect(master);
+  gateNode.connect(delayNode);delayNode.connect(wetGain);wetGain.connect(master);
   delayNode.connect(feedback);feedback.connect(delayNode);
-  gainNode.connect(convolver);convolver.connect(reverbMix);reverbMix.connect(master);
-  master.connect(analyser);analyser.connect(ctx.destination);
+  gateNode.connect(convolver);convolver.connect(reverbMix);reverbMix.connect(master);
+  master.connect(limiter);limiter.connect(analyser);analyser.connect(ctx.destination);
   setValues();$('status').textContent='MICROPHONE ON • LIVE MONITOR';$('start').disabled=true;$('stop').disabled=false;$('start').style.opacity='.45';meter();
  }catch(e){$('status').textContent='MIC ACCESS ERROR';alert('ما قدرنا نشغل المايك. افتح الصفحة في Safari واسمح باستخدام المايك من إعدادات الموقع.');}
 };
@@ -95,13 +110,13 @@ $('stop').onclick=()=>{
  if(raf)cancelAnimationFrame(raf);
  if(stream)stream.getTracks().forEach(t=>t.stop());
  if(ctx)ctx.close();
- stream=ctx=null;analyser=null;$('meter').style.width='0';$('status').textContent='MICROPHONE OFF';$('start').disabled=false;$('stop').disabled=true;$('start').style.opacity='1';
+ stream=ctx=null;analyser=null;inputAnalyser=null;gateNode=null;$('meter').style.width='0';$('status').textContent='MICROPHONE OFF';$('start').disabled=false;$('stop').disabled=true;$('start').style.opacity='1';
 };
 document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>{
  document.querySelectorAll('.preset').forEach(x=>x.classList.remove('active'));b.classList.add('active');
  const p=b.dataset.preset;
- const vals=p==='silver'?[500,100,420,75]:p==='deep'?[450,100,700,80]:p==='clean'?[110,0,180,0]:[450,35,200,15];
- ['gain','echo','delay','reverb'].forEach((id,i)=>$(id).value=vals[i]);updateLabels();setValues();
+ const vals=p==='silver'?[500,55,320,58,32,100,5]:p==='deep'?[600,62,650,68,48,100,3]:p==='clean'?[110,0,180,0,0,85,15]:[800,42,220,38,20,100,0];
+ ['gain','echo','delay','feedback','reverb','output','gate'].forEach((id,i)=>$(id).value=vals[i]);updateLabels();setValues();
 });
 updateLabels();
 </script>
